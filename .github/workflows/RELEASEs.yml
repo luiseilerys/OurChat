@@ -1,0 +1,341 @@
+name: Releases
+on:
+  push:
+
+permissions:
+  contents: write
+
+jobs:
+  create_gitee_release:
+    name: Create Gitee release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Create Release Only
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: create_release
+          gitee_owner: skyuoi
+          gitee_repo: OurChat
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_release_name: ${{ github.ref_name }}
+          gitee_release_body: "Release ${{ github.ref_name }}"
+          gitee_target_commitish: main
+
+  create_server_release:
+    name: Create server release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Get release version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push Docker image
+        env:
+          SCCACHE_OSS_BUCKET: ${{ secrets.SCCACHE_BUCKET }}
+          SCCACHE_OSS_ENDPOINT: ${{ secrets.SCCACHE_OSS_ENDPOINT }}
+        run: |
+          python3 script/build_production_container.py --extension ${{ steps.get_version.outputs.VERSION }} --extension latest --skip-base --push --sccache-bucket $SCCACHE_OSS_BUCKET --sccache-endpoint $SCCACHE_OSS_ENDPOINT
+
+      - name: Prepare server bundle files
+        run: |
+          mkdir -p bundle
+          cp docker/compose.yml bundle/
+          cp docker/compose.debian.yml bundle/
+          cp -r docker/config bundle/
+
+      - name: Update image tags in compose files
+        run: |
+          export VERSION=${{ steps.get_version.outputs.VERSION }}
+          sed -i "s/nightly/$VERSION/g" bundle/compose.yml
+          sed -i "s/nightly/$VERSION/g" bundle/compose.debian.yml
+
+      - name: Bundle Resources
+        run: |
+          cp -r resource bundle/
+          sed -i "s|../resource/|./resource/|g" bundle/compose.yml
+          sed -i "s|../resource/|./resource/|g" bundle/compose.debian.yml
+
+      - name: Create server bundle archive
+        run: |
+          cd bundle
+          zip -r ../ourchat-server.zip .
+          cd ..
+
+      - name: Release to Github
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            ourchat-server.zip
+      - name: Release to Gitee
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: upload_asset
+          gitee_owner: skyuoi
+          gitee_repo: OurChat
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_upload_retry_times: 3
+          gitee_file_name: ourchat-server.zip
+          gitee_file_path: ourchat-server.zip
+
+  create_client_on_linux_release:
+    name: Create client on Linux release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "32.x"
+      - name: Install requests
+        run: |
+          sudo apt update
+          sudo apt install -y libayatana-appindicator3-dev
+          pip install requests
+      - name: About code generate
+        run: python script/generate_about_code.py --afdian_userid ${{ secrets.AFDIAN_USERID }} --afdian_token ${{ secrets.AFDIAN_TOKEN }} --version ${{ github.ref_name }} --commit_sha ${{ github.sha }} --enable_version_check
+
+      - name: Git PAT Auth
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: pwsh
+        run: |
+          git config --global url."https://${PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${PAT}@github.com/".insteadOf "git@github.com:"
+      - name: Flutter Init
+        run: cd client && flutter pub get
+      - name: Grpc generate
+        run: dart pub global activate protoc_plugin 25.0.0 && python script/generate.pb.dart.py
+      - name: Drift generate
+        run: cd client && dart run build_runner build
+      - name: Install packages
+        run: sudo apt install -y libgtk-3-dev
+      - name: Build Release
+        run: cd client && flutter build linux
+      - name: Compress
+        run: cd client/build/linux/x64/release && tar -czvf OurChat_${{github.ref_name}}_linux.tar.gz bundle
+      - name: Release to Github
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            client/build/linux/x64/release/OurChat_${{github.ref_name}}_linux.tar.gz
+      - name: Release to Gitee
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: upload_asset
+          gitee_owner: skyuoi
+          gitee_repo: OurChat
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_upload_retry_times: 3
+          gitee_file_name: OurChat_${{github.ref_name}}_linux.tar.gz
+          gitee_file_path: client/build/linux/x64/release/OurChat_${{github.ref_name}}_linux.tar.gz
+
+  create_client_on_android_release:
+    name: Create client on Android release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "32.x"
+      - name: Install requests
+        run: pip install requests
+      - name: About code generate
+        run: python script/generate_about_code.py --afdian_userid ${{ secrets.AFDIAN_USERID }} --afdian_token ${{ secrets.AFDIAN_TOKEN }} --version ${{ github.ref_name }} --commit_sha ${{ github.sha }} --enable_version_check
+      - name: Git PAT Auth
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: pwsh
+        run: |
+          git config --global url."https://${PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${PAT}@github.com/".insteadOf "git@github.com:"
+      - name: Flutter Init
+        run: cd client && flutter pub get
+      - name: Grpc generate
+        run: dart pub global activate protoc_plugin 25.0.0 && python script/generate.pb.dart.py
+      - name: Drift generate
+        run: cd client && dart run build_runner build
+      - name: Install packages
+        run: |
+          sudo apt update
+          sudo apt install -y libgtk-3-dev
+      - name: Generate key
+        run: echo "${{ secrets.KEY_STORE }}" | base64 --decode > client/android/app/key.jks  && echo "${{ secrets.KEY_PROPERTIES }}" > client/android/app/key.properties
+      - name: Build Release
+        run: cd client && flutter build apk -PuseReleaseSigning=true --split-per-abi && flutter build apk -PuseReleaseSigning=true
+      - name: Rename armeabi-v7a apk
+        run: mv client/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_android_armeabi-v7a.apk
+      - name: Rename arm64-v8a apk
+        run: mv client/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_android_arm64-v8a.apk
+      - name: Rename x86_64 apk
+        run: mv client/build/app/outputs/flutter-apk/app-x86_64-release.apk  client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_android_x86_64.apk
+      - name: Rename universal apk
+        run: mv client/build/app/outputs/flutter-apk/app-release.apk  client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_android_universal.apk
+      - name: Release to Github
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_armeabi-v7a.apk
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_arm64-v8a.apk
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_x86_64.apk
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_universal.apk
+      - name: Release to Gitee
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: upload_asset
+          gitee_owner: skyuoi
+          gitee_repo: OurChat
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_upload_retry_times: 3
+          gitee_files: |
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_armeabi-v7a.apk
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_arm64-v8a.apk
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_x86_64.apk
+            client/build/app/outputs/flutter-apk/OurChat_${{github.ref_name}}_universal.apk
+
+  create_client_on_windows_release:
+    name: Create client on Windows release
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "32.x"
+      - name: Install requests
+        run: pip install requests
+      - name: About code generate
+        run: python script/generate_about_code.py --afdian_userid ${{ secrets.AFDIAN_USERID }} --afdian_token ${{ secrets.AFDIAN_TOKEN }} --version ${{ github.ref_name }} --commit_sha ${{ github.sha }} --enable_version_check
+      - name: Git PAT Auth
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: pwsh
+        run: |
+          git config --global url."https://${PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${PAT}@github.com/".insteadOf "git@github.com:"
+      - name: Flutter Init
+        run: cd client && flutter pub get
+      - name: Grpc generate
+        run: dart pub global activate protoc_plugin 25.0.0 && python script/generate.pb.dart.py
+      - name: Drift generate
+        run: cd client && dart run build_runner build
+      - name: Build Release
+        run: cd client && flutter build windows
+      - name: Rename
+        run: mv client/build/windows/x64/runner/Release/client.exe client/build/windows/x64/runner/Release/OurChat.exe
+      - name: Compress
+        run: cd client/build/windows/x64/runner && tar -czvf OurChat_${{github.ref_name}}_windows.tar.gz Release
+      - name: Release to Github
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            client/build/windows/x64/runner/OurChat_${{github.ref_name}}_windows.tar.gz
+      - name: Release to Gitee
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: upload_asset
+          gitee_owner: skyuoi
+          gitee_repo: OurChat
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_upload_retry_times: 3
+          gitee_file_name: OurChat_${{github.ref_name}}_windows.tar.gz
+          gitee_file_path: client/build/windows/x64/runner/OurChat_${{github.ref_name}}_windows.tar.gz
+
+  create_client_on_macos_release:
+    name: Create client on MacOS release
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "32.x"
+      - name: Install requests
+        run: pip install requests
+      - name: About code generate
+        run: python script/generate_about_code.py --afdian_userid ${{ secrets.AFDIAN_USERID }} --afdian_token ${{ secrets.AFDIAN_TOKEN }} --version ${{ github.ref_name }} --commit_sha ${{ github.sha }} --enable_version_check
+      - name: Git PAT Auth
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: pwsh
+        run: |
+          git config --global url."https://${PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${PAT}@github.com/".insteadOf "git@github.com:"
+      - name: Flutter Init
+        run: cd client && flutter pub get
+      - name: Grpc generate
+        run: dart pub global activate protoc_plugin 25.0.0 && python script/generate.pb.dart.py
+      - name: Drift generate
+        run: cd client && dart run build_runner build
+      - name: Build Release
+        run: cd client && flutter build macos
+      - name: Compress
+        run: cd client/build/macos/Build/Products/Release && tar -czvf OurChat_${{github.ref_name}}_macos.tar.gz OurChat.app
+      - name: Release to Github
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            client/build/macos/Build/Products/Release/OurChat_${{github.ref_name}}_macos.tar.gz
+      - name: Release to Gitee
+        uses: nicennnnnnnlee/action-gitee-release@master
+        with:
+          gitee_action: upload_asset
+          gitee_owner: skyuoi
+          gitee_repo: OurChat
+          gitee_token: ${{ secrets.GITEE_TOKEN }}
+          gitee_tag_name: ${{ github.ref_name }}
+          gitee_upload_retry_times: 3
+          gitee_file_name: OurChat_${{github.ref_name}}_macos.tar.gz
+          gitee_file_path: client/build/macos/Build/Products/Release/OurChat_${{github.ref_name}}_macos.tar.gz
