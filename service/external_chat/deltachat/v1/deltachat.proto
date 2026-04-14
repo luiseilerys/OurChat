@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package service.external_chat.deltachat.v1;
+
+// DeltaChat external account management
+
+message CreateDeltaChatAccountRequest {
+  // Chatmail server URL (e.g., "https://chatmail.example.com")
+  string chatmail_server = 1;
+  // Desired username (will become email@chatmail_server)
+  string username = 2;
+  // Display name for the account
+  string display_name = 3;
+}
+
+message CreateDeltaChatAccountResponse {
+  // Internal OurChat account ID linking to this external account
+  int64 account_id = 1;
+  // Generated email address
+  string email = 2;
+  // Account status
+  AccountStatus status = 3;
+}
+
+message LinkDeltaChatAccountRequest {
+  // Existing email address
+  string email = 1;
+  // Email password or app-specific password
+  string password = 2;
+  // IMAP server (optional, auto-detect if empty)
+  string imap_server = 3;
+  // SMTP server (optional, auto-detect if empty)
+  string smtp_server = 4;
+  // Display name for the account
+  string display_name = 5;
+}
+
+message LinkDeltaChatAccountResponse {
+  // Internal OurChat account ID linking to this external account
+  int64 account_id = 1;
+  // Email address
+  string email = 2;
+  // Account status
+  AccountStatus status = 3;
+}
+
+message DeltaChatMessage {
+  // Message ID
+  string message_id = 1;
+  // Sender email
+  string from = 2;
+  // Recipient email
+  string to = 3;
+  // Message subject
+  string subject = 4;
+  // Message body (text)
+  string body = 5;
+  // Message timestamp
+  int64 timestamp = 6;
+  // Is encrypted (Autocrypt)
+  bool is_encrypted = 7;
+  // Attachments
+  repeated string attachments = 8;
+}
+
+message SendDeltaChatMessageRequest {
+  // Recipient email address
+  string recipient = 1;
+  // Message subject
+  string subject = 2;
+  // Message body
+  string body = 3;
+  // Attachment file paths (optional)
+  repeated string attachments = 4;
+}
+
+message SendDeltaChatMessageResponse {
+  // Message ID
+  string message_id = 1;
+  // Send status
+  SendStatus status = 2;
+}
+
+enum AccountStatus {
+  ACCOUNT_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_STATUS_ACTIVE = 1;
+  ACCOUNT_STATUS_PENDING_VERIFICATION = 2;
+  ACCOUNT_STATUS_SUSPENDED = 3;
+  ACCOUNT_STATUS_ERROR = 4;
+}
+
+enum SendStatus {
+  SEND_STATUS_UNSPECIFIED = 0;
+  SEND_STATUS_SENT = 1;
+  SEND_STATUS_FAILED = 2;
+  SEND_STATUS_PENDING = 3;
+}

@@ -48,6 +48,20 @@ fn main() -> anyhow::Result<()> {
     if !should_rebuilt {
         return Ok(());
     }
+    // Collect all proto files including external chat protocols
+    let mut protos = vec![
+        "../../service/ourchat/v1/ourchat.proto",
+        "../../service/auth/v1/auth.proto",
+        "../../service/basic/v1/basic.proto",
+        "../../service/server_manage/v1/server_manage.proto",
+    ];
+    
+    // Add DeltaChat protocol definitions
+    protos.push("../../service/external_chat/deltachat/v1/deltachat.proto");
+    
+    // Add ArcaneChat protocol definitions
+    protos.push("../../service/external_chat/arcanechat/v1/arcanechat.proto");
+
     tonic_prost_build::configure()
         .skip_debug(["service.ourchat.upload.v1.UploadChunkRequest"])
         .type_attribute(
@@ -127,12 +141,7 @@ fn main() -> anyhow::Result<()> {
         .out_dir("./src/generated/")
         .file_descriptor_set_path("./src/generated/GRPC_FILE_DESCRIPTOR")
         .compile_protos(
-            &[
-                "../../service/ourchat/v1/ourchat.proto",
-                "../../service/auth/v1/auth.proto",
-                "../../service/basic/v1/basic.proto",
-                "../../service/server_manage/v1/server_manage.proto",
-            ],
+            &protos,
             &["../.."],
         )?;
     Ok(())
