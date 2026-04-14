@@ -2,6 +2,7 @@ mod avatar;
 mod oauth;
 mod status;
 pub mod verify;
+pub mod external_chat;
 
 use crate::process::error_msg;
 use crate::{Cfg, SharedData};
@@ -160,6 +161,12 @@ impl HttpServer {
             tower_http::services::ServeDir::new(&resources_path),
         );
 
+        // Setup external chat state
+        let external_chat_state = Arc::new(external_chat::ExternalChatState {
+            db_pool: db_pool.clone(),
+            shared_data: shared_data.clone(),
+        });
+
         let mut router: axum::Router =
             axum::Router::new().nest("/v1", v1.with_state((db_pool.clone(), shared_data.clone())));
 
@@ -167,6 +174,11 @@ impl HttpServer {
         if let Some(oauth_routes) = oauth_routes {
             router = router.merge(oauth_routes);
         }
+
+        // Add external chat routes (DeltaChat/ArcaneChat account creation)
+        router = router.merge(
+            external_chat::config().with_state(external_chat_state.clone())
+        );
 
         router = router
             .merge(

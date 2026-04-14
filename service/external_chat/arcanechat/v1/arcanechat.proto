@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package service.external_chat.arcanechat.v1;
+
+// ArcaneChat external account management
+// ArcaneChat uses chatmail protocol for anonymous account creation
+
+message CreateArcaneChatAccountRequest {
+  // Chatmail server URL (e.g., "https://arcanechat.me")
+  string chatmail_server = 1;
+  // Desired username (anonymous, no email required)
+  string username = 2;
+  // Display name for the account
+  string display_name = 3;
+}
+
+message CreateArcaneChatAccountResponse {
+  // Internal OurChat account ID linking to this external account
+  int64 account_id = 1;
+  // Generated chatmail address (username@server)
+  string chatmail_address = 2;
+  // Account credentials (stored securely)
+  string access_token = 3;
+  // Account status
+  AccountStatus status = 4;
+}
+
+message LinkArcaneChatAccountRequest {
+  // Existing chatmail address
+  string chatmail_address = 1;
+  // Access token or password
+  string access_token = 2;
+  // Display name for the account
+  string display_name = 3;
+}
+
+message LinkArcaneChatAccountResponse {
+  // Internal OurChat account ID linking to this external account
+  int64 account_id = 1;
+  // Chatmail address
+  string chatmail_address = 2;
+  // Account status
+  AccountStatus status = 3;
+}
+
+message ArcaneChatMessage {
+  // Message ID
+  string message_id = 1;
+  // Sender chatmail address
+  string from = 2;
+  // Recipient chatmail address
+  string to = 3;
+  // Message body
+  string body = 4;
+  // Message timestamp
+  int64 timestamp = 5;
+  // Is encrypted
+  bool is_encrypted = 6;
+  // Attachments
+  repeated string attachments = 7;
+}
+
+message SendArcaneChatMessageRequest {
+  // Recipient chatmail address
+  string recipient = 1;
+  // Message body
+  string body = 2;
+  // Attachment file paths (optional)
+  repeated string attachments = 3;
+}
+
+message SendArcaneChatMessageResponse {
+  // Message ID
+  string message_id = 1;
+  // Send status
+  SendStatus status = 2;
+}
+
+enum AccountStatus {
+  ACCOUNT_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_STATUS_ACTIVE = 1;
+  ACCOUNT_STATUS_PENDING_VERIFICATION = 2;
+  ACCOUNT_STATUS_SUSPENDED = 3;
+  ACCOUNT_STATUS_ERROR = 4;
+}
+
+enum SendStatus {
+  SEND_STATUS_UNSPECIFIED = 0;
+  SEND_STATUS_SENT = 1;
+  SEND_STATUS_FAILED = 2;
+  SEND_STATUS_PENDING = 3;
+}
