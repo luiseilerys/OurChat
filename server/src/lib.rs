@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod db;
+pub mod deltachat;
 pub mod helper;
 pub mod httpserver;
 pub mod matrix;
@@ -12,6 +13,7 @@ pub mod process;
 pub mod rabbitmq;
 mod server;
 pub mod webrtc;
+pub mod arcanechat;
 
 use crate::config::{Cfg, MainCfg};
 use crate::httpserver::Launcher;

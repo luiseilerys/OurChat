@@ -92,6 +92,11 @@ ctor.workspace = true
 tower_governor.workspace = true
 scopeguard.workspace = true
 
+# Email/Chat protocol support
+tokio-rustls = "0.26"
+lettre = { version = "0.11", features = ["tokio1-rustls-tls"] }
+imap-proto = "0.15"
+
 #[dependencies.matrix-sdk]
 #version = "0"
 #default-features = false

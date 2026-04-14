@@ -109,6 +109,14 @@ pub struct MainCfg {
     pub initial_admin_ocid: Option<OCID>,
     #[serde(default = "constants::default_patches_directory")]
     pub patches_directory: String,
+    
+    /// DeltaChat integration configuration
+    #[serde(default)]
+    pub deltachat: crate::deltachat::config::DeltaChatConfig,
+    
+    /// ArcaneChat integration configuration
+    #[serde(default)]
+    pub arcanechat: crate::arcanechat::config::ArcaneChatConfig,
 
     #[serde(skip)]
     pub cmd_args: ParserCfg,
