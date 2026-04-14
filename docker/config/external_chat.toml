@@ -1,0 +1,44 @@
+# Configuración de integración con protocolos externos
+
+## DeltaChat (Email-based messaging)
+
+[deltachat]
+enabled = false
+email_address = "ourchat@ourchat.org"
+
+# IMAP configuration for receiving messages
+[deltachat.imap]
+server = "imap.ourchat.org"
+port = 993
+use_tls = true
+username = "ourchat@ourchat.org"
+password = ""
+
+# SMTP configuration for sending messages
+[deltachat.smtp]
+server = "smtp.ourchat.org"
+port = 587
+use_tls = true
+username = "ourchat@ourchat.org"
+password = ""
+
+# PGP key configuration for Autocrypt encryption
+[deltachat.pgp]
+private_key_path = "/path/to/private.key"
+public_key_path = "/path/to/public.key"
+passphrase = ""
+auto_generate = true
+
+# Message polling interval in seconds
+poll_interval_secs = 30
+
+## ArcaneChat (Decentralized protocol)
+
+[arcanechat]
+enabled = false
+server_address = "arcane.chat.network"
+server_port = 8443
+use_tls = true
+auth_token = ""
+timeout_secs = 30
+reconnect_interval_secs = 60
